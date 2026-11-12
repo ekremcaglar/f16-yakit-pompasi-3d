@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>F-16 Yakıt Boost Pompası · 3B Etkileşimli Eğitim Simülasyonu</title>
+<meta name="description" content="F-16 yakıt sistemi elektrikli santrifüj boost pompasının 3B, parçalara ayrılabilir (teardown), etkileşimli eğitim simülasyonu. Değerler yaklaşık ve eğitim amaçlıdır.">
+<meta name="theme-color" content="#05080d">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Cpath d=%22M8 1l7 7-7 7-7-7z%22 fill=%22%2338d6ff%22/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">◆</span>
+      <div>
+        <h1>F-16 Yakıt Boost Pompası <small>3B Teardown &amp; Simülasyon</small></h1>
+        <p class="sub">Elektrikli santrifüj boost pompası (electric centrifugal fuel boost pump) · eğitim modeli</p>
+      </div>
+    </div>
+    <div class="badge warn" title="Bu uygulama resmi F-16 teknik verisi değildir.">EĞİTİM AMAÇLI · Değerler yaklaşıktır · Resmî T.O. verisi değildir</div>
+  </header>
+
+  <div id="viewport">
+    <canvas id="c"></canvas>
+    <div id="loading"><div class="spin"></div><span>3B model yükleniyor…</span></div>
+    <div class="hud" id="hud">
+      <div><b id="h-rpm">0</b><span>RPM</span></div>
+      <div><b id="h-flow">0</b><span>GPM</span></div>
+      <div><b id="h-dp">0.0</b><span>ΔP psid</span></div>
+      <div><b id="h-amp">0.0</b><span>A</span></div>
+      <div class="hstat" id="h-stat">KAPALI</div>
+    </div>
+    <div class="viewtools">
+      <button class="chip" id="b-reset" title="Kamerayı sıfırla">⟲ Görünüm</button>
+      <button class="chip" id="b-rotate" title="Otomatik döndür">↻ Döndür</button>
+    </div>
+    <div class="explodebar">
+      <label for="explode">Teardown (parçalara ayır)</label>
+      <input type="range" id="explode" min="0" max="100" value="0">
+      <button class="chip accent" id="b-explode">Ayır ▸</button>
+    </div>
+    <div class="hint" id="hint">Döndür: sürükle · Yakınlaş: tekerlek/çimdik · Kaydır: sağ tık/iki parmak · Parça seç: tıkla/dokun</div>
+  </div>
+
+  <aside class="col left">
+    <section class="panel" data-tab="ctrl">
+      <h2>Kontrol <span class="tag">Test tezgâhı</span></h2>
+      <div class="row power">
+        <button id="b-power" class="power-btn" aria-pressed="false"><span class="dot"></span><span id="power-label">GÜÇ KAPALI</span></button>
+        <div class="pwr-note">200 VAC · 3 faz · 400 Hz <a href="#" data-src="eaton-f16" class="srcref">[1]</a></div>
+      </div>
+      <div class="ctl">
+        <label>Motor hız komutu <output id="o-speed">100%</output></label>
+        <input type="range" id="speed" min="40" max="105" value="100">
+        <p class="note">Gerçek pompa sabit 400 Hz şebekede ~sabit devirde çalışır; bu ayar yalnızca eğitim amaçlı "değişken frekans" tezgâh kontrolüdür.</p>
+      </div>
+      <div class="ctl">
+        <label>Akış talebi / çıkış vanası <output id="o-valve">100%</output></label>
+        <input type="range" id="valve" min="5" max="100" value="100">
+      </div>
+      <div class="ctl">
+        <label>Yakıt sıcaklığı (JP-8) <output id="o-temp">30 °C</output></label>
+        <input type="range" id="ftemp" min="-30" max="80" value="30">
+      </div>
+      <div class="ctl">
+        <label>İrtifa <output id="o-alt">0 ft</output></label>
+        <input type="range" id="alt" min="0" max="50000" step="500" value="0">
+      </div>
+      <div class="ctl toggle-row">
+        <label class="sw"><input type="checkbox" id="press" checked><span></span> Tank basınçlandırma (≈5 psig)</label>
+      </div>
+      <h3>Arıza senaryoları</h3>
+      <div class="faults" id="faults">
+        <button class="fault active" data-fault="none">Normal</button>
+        <button class="fault" data-fault="cav">Kavitasyon</button>
+        <button class="fault" data-fault="clog">Tıkalı giriş süzgeci</button>
+        <button class="fault" data-fault="lowv">Düşük gerilim</button>
+        <button class="fault" data-fault="phase">Faz kaybı</button>
+        <button class="fault" data-fault="dry">Kuru çalışma</button>
+      </div>
+      <p class="note" id="fault-desc">Normal çalışma.</p>
+      <h3>Görünüm</h3>
+      <div class="toggles">
+        <label class="sw"><input type="checkbox" id="xray"><span></span> X-ray (şeffaf gövde)</label>
+        <label class="sw"><input type="checkbox" id="cut"><span></span> Kesit (cutaway)</label>
+        <label class="sw"><input type="checkbox" id="flowfx" checked><span></span> Yakıt akış parçacıkları</label>
+        <label class="sw"><input type="checkbox" id="labels"><span></span> Parça etiketleri</label>
+      </div>
+    </section>
+  </aside>
+
+  <aside class="col right">
+    <section class="panel" data-tab="gauge">
+      <h2>Göstergeler <span class="tag">≈ yaklaşık</span></h2>
+      <div class="gauges" id="gauges"></div>
+      <div class="alerts" id="alerts"></div>
+    </section>
+    <section class="panel" data-tab="info">
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-itab="part">Bileşen</button>
+        <button class="tab" data-itab="list">Liste</button>
+        <button class="tab" data-itab="sys">Sistem</button>
+        <button class="tab" data-itab="src">Kaynaklar</button>
+      </div>
+      <div class="itab active" id="itab-part">
+        <div id="partcard" class="partcard empty">Bir parçaya tıklayın veya <b>Liste</b> sekmesinden seçin.</div>
+      </div>
+      <div class="itab" id="itab-list"><ul id="partlist" class="partlist"></ul></div>
+      <div class="itab" id="itab-sys"><div id="system"></div></div>
+      <div class="itab" id="itab-src"><div id="sources"></div></div>
+    </section>
+  </aside>
+
+  <nav class="mtabs" id="mtabs">
+    <button data-m="ctrl" class="active">Kontrol</button>
+    <button data-m="gauge">Göstergeler</button>
+    <button data-m="info">Bilgi</button>
+    <button data-m="hide" id="m-collapse" aria-label="Paneli daralt">▾</button>
+  </nav>
+</div>
+<noscript>Bu uygulama JavaScript ve WebGL gerektirir.</noscript>
+<script type="module" src="app.js"></script>
+</body>
+</html>
